@@ -40,8 +40,6 @@ function onWorkerReply(iWorker, e){
             console.log("completed worker "+iWorker+" (load: "+hashingWorkerLoads[iWorker]+")");
             break;
     }
-    if (e.data.action === "hash_found")
-      notifyHashFound({ url: e.data.url });
 }
 
 
