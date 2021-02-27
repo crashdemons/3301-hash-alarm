@@ -1,10 +1,49 @@
+const minCores = 4;
+const guessCores = (navigator['hardwareConcurrency']||1)<minCores ? minCores : navigator.hardwareConcurrency;
 
-const hashingWorker = new Worker(browser.extension.getURL("src/hashing_worker.js"));
+console.log("Initializing workers for "+guessCores+" cores");
 
-hashingWorker.onmessage = function(e) {
-  if (e.data.action == "hash_found")
-    notifyHashFound({ url: e.data.url });
+const hashingWorkers = [];
+const hashingWorkerLoads = [];
+for(var iWorker=0;iWorker<guessCores;iWorker++){
+    let hashingWorker = new Worker(browser.extension.getURL("src/hashing_worker.js"));
+    let iWorkerInstance = iWorker;
+    hashingWorker.onmessage = function(e) {
+        onWorkerReply(iWorkerInstance,e);
+    };
+    hashingWorkers.push(hashingWorker);
+    hashingWorkerLoads.push(0);
 }
+
+function mindex(a) {
+ var lowest = 0;
+ for (var i = 1; i < a.length; i++) {
+  if (a[i] < a[lowest]) lowest = i;
+ }
+ return lowest;
+}
+function nextHashingWorkerId(){
+    return mindex(hashingWorkerLoads);
+}
+
+
+
+function onWorkerReply(iWorker, e){
+    let action = e.data.action;
+    let requestId = e.data.requestId;
+    switch(action){
+        case "hash_found":
+            notifyHashFound({ url: e.data.url });
+            break;
+        case "completed_finalize_request":
+            hashingWorkerLoads[iWorker]--;
+            console.log("completed worker "+iWorker+" (load: "+hashingWorkerLoads[iWorker]+")");
+            break;
+    }
+    if (e.data.action === "hash_found")
+      notifyHashFound({ url: e.data.url });
+}
+
 
 class Request {
   static get(requestId, url) {
@@ -58,13 +97,16 @@ class Request {
   constructor(requestId, url) {
     this.id = requestId;
     this.url = url;
-
+    this.hashingWorkerId = nextHashingWorkerId();
+    this.hashingWorker = hashingWorkers[this.hashingWorkerId];
     this.data_transfered = false;
+    hashingWorkerLoads[this.hashingWorkerId]++;
+    console.log("Selected worker "+this.hashingWorkerId+" (load: "+hashingWorkerLoads[this.hashingWorkerId]+") for "+url);
   }
 
   sendData(data) {
     if (!this.data_transfered) {
-      hashingWorker.postMessage({
+      this.hashingWorker.postMessage({
         "action": "init_request",
 
         "requestId": this.id,
@@ -75,7 +117,7 @@ class Request {
     }
 
     // Transfers the object ownership to the Web Worker, instead of making a copy of it
-    hashingWorker.postMessage({
+    this.hashingWorker.postMessage({
       "action": "update_request",
 
       "requestId": this.id,
@@ -89,7 +131,7 @@ class Request {
     if (!this.data_transfered)
       return;
 
-    hashingWorker.postMessage({
+    this.hashingWorker.postMessage({
       "action": "finalize_request",
 
       "requestId": this.id
