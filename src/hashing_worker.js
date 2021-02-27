@@ -7,11 +7,17 @@ importScripts("./hashbox.js");
 
 var currentRequests = {};
 
-function foundHash(url) {
+function foundHash(url,requestId) {
   postMessage({
     "action": "hash_found",
-
-    "url": url
+    "url": url,
+    "requestId": requestId
+  });
+}
+function completedAction(action,requestId) {
+  postMessage({
+    "action": "completed_"+action,
+    "requestId": requestId
   });
 }
 
@@ -30,7 +36,6 @@ onmessage = function(e) {
         "url": url,
         "hashes": new HashingBox()
       }
-
       break;
     case "update_request":
       currentRequests[requestId].hashes.update(e.data.data);
@@ -38,11 +43,12 @@ onmessage = function(e) {
       break;
     case "finalize_request":
       if (currentRequests[requestId].hashes.verify())
-        foundHash(currentRequests[requestId].url);
+        foundHash(currentRequests[requestId].url, requestId);
 
       currentRequests[requestId].hashes.cleanup();
       delete currentRequests[requestId];
 
       break;
   }
+  completedAction(action,requestId);
 };
