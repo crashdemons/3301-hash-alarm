@@ -1,9 +1,16 @@
 
+var queue_count = 0;
+
 const hashingWorker = new Worker(browser.extension.getURL("src/hashing_worker.js"));
+
 
 hashingWorker.onmessage = function(e) {
   if (e.data.action == "hash_found")
     notifyHashFound({ url: e.data.url });
+  if (e.data.action=="finished_finalize_request"){
+	  queue_count--;
+	  console.log(new Date().toLocaleTimeString(),"removed from request queue: now ",queue_count);
+  }
 }
 
 // Enabling/Disabling the addon
@@ -107,6 +114,9 @@ class Request {
 
   sendData(data) {
     if (!this.data_transfered) {
+		queue_count++;
+		console.log(new Date().toLocaleTimeString(),"added to request queue: now ",queue_count);
+		
       hashingWorker.postMessage({
         "action": "init_request",
 

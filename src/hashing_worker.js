@@ -63,4 +63,8 @@ onmessage = function(e) {
 
       break;
   }
+  
+  postMessage({
+	  "action":"finished_"+action
+  });
 };
